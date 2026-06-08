@@ -1,8 +1,8 @@
 ---
 title: "Video Game Sales Analysis"
 subtitle: "Industry trends across time, genres, and publishers"
-author: "Florijan Peric"
-StudyProgram: "RIN-3"
+author: "Florijan Peric| Student ID: 89231252| RIN3"
+
 
 format:
   html:
