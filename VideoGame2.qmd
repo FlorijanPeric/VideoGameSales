@@ -1,0 +1,364 @@
+---
+title: "Video Game Sales Analysis"
+subtitle: "Industry trends across time, genres, and publishers"
+author: "Florijan Peric"
+
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    code-fold: false
+
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+#  Introduction
+
+This project analyzes the Video Game Sales dataset, which contains information about video game sales across different platforms, genres, publishers, and regions. Video games have become one of the largest entertainment industries in the world, making sales data an interesting source for understanding market trends and consumer preferences.
+
+The analysis focuses on several related questions. First, it examines which game genres generate the highest global sales. Second, it investigates how video game sales have changed over time and whether there are clear periods of growth and decline. Third, it explores which publishers dominate the market and how sales differ across geographic regions.
+
+The main research questions are:
+
+Which video game genres generate the highest sales?
+How have video game sales changed over time?
+Which publishers are the most successful in terms of global sales?
+How do sales differ between regions?
+Which publisher–genre combinations achieve the highest sales?
+
+The analysis uses the Video Game Sales dataset obtained from Kaggle. The dataset contains information on game titles, release years, platforms, genres, publishers, and sales figures from North America, Europe, Japan, and other regions. Using data transformation, aggregation, and visualization techniques, the project aims to identify important trends and patterns within the video game industry.
+
+```{r}
+library(tidyverse)
+library(knitr)
+
+games <- read_csv("vgsales.csv", show_col_types = FALSE)
+```
+
+#  Data Presentation
+The dataset contains information about video game sales across multiple platforms, publishers, genres, and geographic regions. Each row represents a single video game, while the columns describe its commercial performance and basic characteristics. The dataset includes thousands of games released between the early 1980s and the 2010s, making it suitable for analyzing long-term trends in the video game industry.
+
+## First Rows
+The first few rows of the dataset are displayed to provide an overview of its structure and the type of information available for each game.
+```{r}
+head(games)
+```
+
+## Structure
+
+```{r}
+glimpse(games)
+```
+The structure of the dataset is examined using glimpse() to verify data types and identify variables that may require cleaning or transformation before analysis.
+
+
+## Column Description
+* Rank – Position of the game in the overall sales ranking.
+* Name – Title of the video game.
+* Platform – Gaming platform on which the game was released (for example PlayStation, Xbox, Wii, or PC).
+* Year – Year in which the game was released.
+* Genre – Category of the game, such as Action, Sports, Racing, or Role-Playing.
+* Publisher – Company responsible for publishing and distributing the game.
+* NA_Sales – Total sales in North America, measured in millions of units.
+* EU_Sales – Total sales in Europe, measured in millions of units.
+* JP_Sales – Total sales in Japan, measured in millions of units.
+* Other_Sales – Total sales in all other regions, measured in millions of units.
+* Global_Sales – Combined worldwide sales, calculated as the sum of sales across all regions.
+
+The regional sales variables make it possible to compare market preferences between different parts of the world, while the platform, genre, and publisher variables allow the identification of the most successful segments of the video game industry.
+
+#  Data Transformation
+
+##  Data Cleaning
+
+Before performing any analysis, the dataset must be cleaned to ensure that all calculations are based on valid observations. Some records contain missing release years, which would make time-based analyses unreliable. These rows are removed using filter(!is.na(Year)).
+
+The Year variable is converted to a numeric type using as.numeric() so that it can be used for calculations and visualizations. Finally, games released before 1980 and records with zero global sales are removed. This creates a cleaner dataset focused on commercially relevant games.
+
+```{r}
+games_clean <- games |>
+  filter(!is.na(Year)) |>
+  mutate(Year = as.numeric(Year)) |>
+  filter(Year >= 1980, Global_Sales > 0)
+```
+
+## Feature Engineering
+Instead of examining every year individually, games can also be grouped into decades such as the 1980s, 1990s, and 2000s. This allows for a clearer analysis of long-term trends in the video game industry.
+```{r}
+games_clean <- games_clean |>
+  mutate(decade = (Year %/% 10) * 10)
+```
+
+## Top-N Function
+
+To avoid repeating code, a custom function is created for selecting the highest-selling games.
+```{r}
+top_n_sales <- function(data, n = 10) {
+  data |>
+    arrange(desc(Global_Sales)) |>
+    slice_head(n = n)
+}
+```
+
+## Top Games
+
+```{r}
+top_games <- top_n_sales(games_clean, 20)
+kable(top_games)
+```
+The previously defined function is applied to the cleaned dataset to obtain the twenty best-selling video games in the dataset.
+## Genre Sales
+
+```{r}
+genre_sales <- games_clean |>
+  group_by(Genre) |>
+  summarise(Total_Sales = sum(Global_Sales, na.rm = TRUE)) |>
+  arrange(desc(Total_Sales))
+
+kable(genre_sales)
+```
+To identify which game genres generate the most revenue, the dataset is grouped by genre and the total global sales are calculated for each category.
+
+
+## Publisher Sales
+
+To determine which companies dominate the video game market, the data is grouped by publisher and total global sales are calculated.
+```{r}
+publisher_sales <- games_clean |>
+  group_by(Publisher) |>
+  summarise(Total_Sales = sum(Global_Sales, na.rm = TRUE)) |>
+  arrange(desc(Total_Sales)) |>
+  slice_head(n = 15)
+
+kable(publisher_sales)
+```
+Disclaimer !! Only the top 15 publishers are shown to focus on the most influential companies in the industry.
+
+## Yearly Sales
+
+To examine changes in the video game market over time, total sales are calculated for each release year.
+```{r}
+year_sales <- games_clean |>
+  group_by(Year) |>
+  summarise(Total_Sales = sum(Global_Sales, na.rm = TRUE))
+
+kable(year_sales)
+```
+We can see that sales increased strongly in the 1990s and early 2000s, peaking around 2008-2010, followed by a decline. That decline is noticable in the table above and graph bellow.
+## Games by genre and copies sold
+
+Sales figures alone do not show how many games were released within each genre. Therefore, the number of games is calculated and combined with the genre sales summary.
+
+```{r}
+genre_count <- games |>
+  group_by(Genre) |>
+  summarise(Game_Count = n())
+
+genre_join <- genre_sales |>
+  inner_join(genre_count, by = "Genre")
+
+kable(genre_join)
+```
+Explanation: inner_join() combines genre sales and game counts. We can see that Action and Sports genres not only have high sales but also a large number of games. 
+
+## Games by publisher and genre
+
+To explore which publisher–genre combinations are most successful, the data is grouped simultaneously by publisher and genre.
+```{r}
+publisher_genre_sales <- games_clean |>
+  group_by(Publisher, Genre) |>
+  summarise(
+    Total_Sales = sum(Global_Sales, na.rm = TRUE),
+    Game_Count = n(),
+    .groups = "drop"
+  ) |>
+  arrange(desc(Total_Sales))|>
+  slice_head(n = 30)
+
+kable(publisher_genre_sales )
+```
+Notice !!: I first tried to slice head after arrange but i could not use it latter for plotting. By slicing in kable, I make a temporary sliced version.
+
+# Exploratory Data Analysis
+
+## Plot 1: Sales by Genre
+
+```{r}
+ggplot(
+  genre_sales,
+  aes(x = reorder(Genre, Total_Sales), y = Total_Sales)
+) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Global Sales by Genre",
+    x = "Genre",
+    y = "Sales (millions)"
+  ) +
+  theme_minimal()
+```
+
+Action and Sports genres generate the highest total sales in the dataset. Action games appeal to a very broad audience and often include popular franchises that release regularly. Sports games also achieve high sales because they attract both dedicated fans and casual players, while annual releases such as football and basketball titles create consistent demand. Genres such as Strategy and Puzzle have lower sales because they target more specialized audiences.
+
+## Plot 2: Sales Through Time
+
+```{r}
+year_sales <- year_sales %>%
+  mutate(
+    Year = trimws(Year),   # odstrani presledke
+    Year = as.numeric(Year)
+  ) %>%
+  filter(!is.na(Year))
+
+ggplot(year_sales,
+       aes(x = Year, y = Total_Sales)) +
+  geom_area(alpha = 0.4) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  scale_x_continuous(
+    breaks = seq(1980, 2020, by = 5)
+  ) +
+  labs(
+    title = "Global Video Game Sales by Year",
+    x = "Year",
+    y = "Sales (millions)"
+  ) +
+  theme_minimal()
+```
+
+The graph shows strong growth in video game sales during the 1990s and early 2000s, followed by a peak around 2008–2010 and then a gradual decline. The growth can be explained by improvements in gaming technology, increasing popularity of home consoles, and expansion of the gaming market worldwide. The peak coincides with the highly successful Wii, Xbox 360, and PlayStation 3 generation.
+The cause for the decline is a mix of many things, like mobile gaming, the rise of digital distribution... which may not be fully captured in the dataset.
+
+## Plot 3: Top Publishers
+
+```{r}
+ggplot(
+  publisher_sales,
+  aes(x = reorder(Publisher, Total_Sales), y = Total_Sales)
+) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top Publishers by Global Sales",
+    x = "Publisher",
+    y = "Sales (millions)"
+  ) +
+  theme_minimal()
+```
+
+Interpretation: A few major publishers dominate the market. Nintendo, Electronic Arts, and Activision are the top three publishers by global sales, indicating their significant influence in the video game industry. These companies have many popular game franchises that contribute to their high sales figures. Also their strong presence across multiple platforms and genres likely contributes to their success (Seen bellow).
+
+## Plot 4: Regional Sales
+
+```{r}
+region_sales <- games |>
+  summarise(
+    North_America = sum(NA_Sales, na.rm = TRUE),
+    Europe = sum(EU_Sales, na.rm = TRUE),
+    Japan = sum(JP_Sales, na.rm = TRUE),
+    Other = sum(Other_Sales, na.rm = TRUE)
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "Region",
+    values_to = "Sales"
+  )
+
+ggplot(region_sales,
+       aes(x = Region, y = Sales)) +
+  geom_col() +
+  labs(
+    title = "Regional Sales Comparison",
+    x = "Region",
+    y = "Sales (millions)"
+  ) +
+  theme_minimal()
+```
+
+Interpretation: North America contributes the largest share of sales. Europe and Japan also have significant sales. The North American market is the largest for video games, likely due to a combination of factors including a large population of gamers, strong gaming culture, and the presence of major game developers and publishers.
+
+# Plot 5: Sales By Genre and Publisher
+```{r}
+ggplot(publisher_genre_sales,
+       aes(x = reorder(Publisher, Total_Sales),
+           y = Total_Sales,
+           fill = Genre)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 20 Publisher–Genre Combinations by Global Sales",
+    x = "Publisher",
+    y = "Global Sales (millions)"
+  ) +
+  theme_minimal()
+```
+The plot shows that publishers tend to be particularly successful in specific genres. Nintendo generates a large proportion of its sales from Action and Adventure games, largely due to franchises such as Mario and Zelda. Electronic Arts performs especially well in Sports games because of its long-running sports series. This suggests that specialization and strong intellectual properties are important factors in publisher success.
+
+# Key Best-Performing Results
+
+To complement the overall analysis, I identify the single best-performing category in each major dimension (genre, publisher, year, and publisher–genre combination).
+
+## Best Genre
+
+```{r}
+best_genre <- genre_sales |>
+  slice_max(Total_Sales, n = 1)
+
+kable(best_genre)
+```
+
+## Best Publisher
+
+```{r}
+best_publisher <- publisher_sales |>
+  slice_max(Total_Sales, n = 1)
+
+kable(best_publisher)
+```
+
+## Best Publisher–Genre Combination
+
+```{r}
+best_publisher_genre <- publisher_genre_sales |>
+  slice_max(Total_Sales, n = 1)
+
+kable(best_publisher_genre)
+```
+
+## Peak Sales Year
+
+```{r}
+best_year <- year_sales |>
+  slice_max(Total_Sales, n = 1)
+
+kable(best_year)
+```
+
+## Interpretation
+
+These results highlight the most dominant parts of the dataset. The best genre represents the most commercially successful type of game overall, while the best publisher shows which company has achieved the highest total global sales. The publisher–genre combination reveals which strategic focus has been most profitable, and the peak year indicates the strongest period in the dataset in terms of total market size.
+
+
+
+# Conclusion
+
+The analysis supports three main conclusions.
+
+First, Action and Sports are the dominant genres in the dataset, generating the highest total global sales. These genres remain consistently successful because they appeal to a wide audience and include many long-running franchises.
+
+Second, the video game industry is highly concentrated, with a small number of publishers accounting for a large share of total sales. Companies such as Nintendo, Electronic Arts, and Activision dominate the market due to strong franchises and consistent multi-platform releases.
+
+Third, video game sales increased strongly from the 1990s, peaked around 2008–2010, and then gradually declined. This pattern likely reflects changes in the industry, including the shift toward digital distribution and mobile gaming, which are not fully captured in this dataset. Regional differences also show that North America is the largest market, followed by Europe and Japan, while other regions contribute a smaller share of total sales.
+
+The main limitation of this project is that the dataset does not include newer digital sales models or mobile gaming, which have become increasingly important in recent years. Despite this, the analysis provides a clear overview of long-term trends in the traditional video game market.
+
+
+# References
+
+- Kaggle Video Game Sales Dataset
+- https://www.kaggle.com/datasets/gregorut/videogamesales
+- 
