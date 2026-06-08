@@ -1,0 +1,2 @@
+App URL: https://videogamesales.netlify.app/
+Github link: https://github.com/FlorijanPeric/VideoGameSales
